@@ -39,7 +39,12 @@ Execute the main script to start the analysis:
 python "Version 1.1.py"
 ```
 
-The script will fetch live market data, perform the analysis, and output a table of undervalued stocks followed by a detailed investment thesis for the top recommendations.
+The app is now **fully interactive**. Upon running, you will be prompted to:
+1.  **Market Suffix**: Enter a suffix like `.MX` for Mexico, `.L` for London, etc. (leave blank for US).
+2.  **Tweak Thresholds**: Customize the 5 core valuation metrics (P/E, P/B, Dividend Yield, ROE, and Debt/Equity). Press Enter to keep the default value.
+3.  **Criteria Threshold**: Choose how many sets of criteria must be met (1-6) to flag a stock as undervalued.
+
+The script will fetch live market data based on these settings, perform the analysis, and output a table of results followed by a detailed investment thesis.
 
 ## 📄 Output
 

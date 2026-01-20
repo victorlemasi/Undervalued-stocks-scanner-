@@ -11,17 +11,39 @@ def calculate_peg_ratio(pe_ratio, growth_rate):
     """Calculate PEG ratio"""
     return pe_ratio / growth_rate if growth_rate > 0 else float('inf')
 
-def analyze_stocks(tickers, min_market_cap=1000000000):
+def analyze_stocks(tickers, min_market_cap=1000000000, criteria_threshold=3, custom_thresholds=None):
     """
     Analyze stocks to find potentially undervalued candidates based on various metrics.
     
     Parameters:
     tickers (list): List of stock ticker symbols to analyze
-    min_market_cap (float): Minimum market cap in dollars to consider
+    min_market_cap (float): Minimum market cap in dollars/local currency to consider
+    criteria_threshold (int): Minimum number of criteria sets that must be met
+    custom_thresholds (dict): User-defined thresholds for valuation metrics
     
     Returns:
     pandas.DataFrame: Analysis results for potentially undervalued stocks
     """
+    # Default thresholds
+    thresholds = {
+        'max_pe': 15,
+        'max_pb': 2,
+        'min_profit_margin': 0.1,
+        'min_current_ratio': 1.5,
+        'max_debt_equity': 100,
+        'min_operating_margin': 15,
+        'max_peg': 1.5,
+        'min_earnings_growth': 10,
+        'min_div_yield': 2.5,
+        'min_roa': 10,
+        'min_roe': 15,
+        'min_distance_from_high': 20,
+        'max_price_to_ma200': -10
+    }
+    
+    if custom_thresholds:
+        thresholds.update(custom_thresholds)
+
     results = []
     
     for ticker in tickers:
@@ -61,6 +83,9 @@ def analyze_stocks(tickers, min_market_cap=1000000000):
             start_date = end_date - timedelta(days=365)
             hist = stock.history(start=start_date, end=end_date)
             
+            if hist.empty:
+                continue
+
             # Calculate technical indicators
             fifty_two_week_high = hist['High'].max()
             fifty_two_week_low = hist['Low'].min()
@@ -68,44 +93,48 @@ def analyze_stocks(tickers, min_market_cap=1000000000):
             distance_from_high = ((fifty_two_week_high - current_price) / fifty_two_week_high) * 100
             
             # Calculate 200-day moving average
-            ma200 = hist['Close'].rolling(window=200).mean().iloc[-1]
-            price_to_ma200 = (current_price / ma200 - 1) * 100
+            ma200_series = hist['Close'].rolling(window=200).mean()
+            if len(ma200_series) > 0 and not np.isnan(ma200_series.iloc[-1]):
+                ma200 = ma200_series.iloc[-1]
+                price_to_ma200 = (current_price / ma200 - 1) * 100
+            else:
+                price_to_ma200 = 0
 
             # Enhanced screening criteria for undervalued stocks
             value_criteria = {
                 'Traditional Value': (
-                    pe_ratio < 15 and
-                    pb_ratio < 2 and
-                    profit_margin > 0.1
+                    pe_ratio < thresholds['max_pe'] and
+                    pb_ratio < thresholds['max_pb'] and
+                    profit_margin > thresholds['min_profit_margin']
                 ),
                 'Quality Metrics': (
-                    current_ratio > 1.5 and
-                    debt_to_equity < 100 and
-                    operating_margin > 15
+                    current_ratio > thresholds['min_current_ratio'] and
+                    debt_to_equity < thresholds['max_debt_equity'] and
+                    operating_margin > thresholds['min_operating_margin']
                 ),
                 'Growth at Reasonable Price': (
-                    peg_ratio < 1.5 and
-                    earnings_growth > 10
+                    peg_ratio < thresholds['max_peg'] and
+                    earnings_growth > thresholds['min_earnings_growth']
                 ),
                 'Graham Style': (
                     graham_number > current_price and
-                    dividend_yield > 2.5
+                    dividend_yield > thresholds['min_div_yield']
                 ),
                 'Profitability': (
-                    roa > 10 and
-                    roe > 15
+                    roa > thresholds['min_roa'] and
+                    roe > thresholds['min_roe']
                 ),
                 'Technical Factors': (
-                    distance_from_high > 20 and
-                    price_to_ma200 < -10
+                    distance_from_high > thresholds['min_distance_from_high'] and
+                    price_to_ma200 < thresholds['max_price_to_ma200']
                 )
             }
             
             # Count how many criteria sets are met
             criteria_met = sum(value_criteria.values())
             
-            # Consider stock undervalued if it meets at least 3 sets of criteria
-            if criteria_met >= 3:
+            # Consider stock undervalued if it meets the user-defined threshold
+            if criteria_met >= criteria_threshold:
                 results.append({
                     'Ticker': ticker,
                     'Company': info.get('longName', 'N/A'),
@@ -151,13 +180,6 @@ def analyze_stocks(tickers, min_market_cap=1000000000):
 def get_stock_recommendations(df, top_n=5):
     """
     Generate detailed recommendations for the top undervalued stocks.
-    
-    Parameters:
-    df (pandas.DataFrame): Analysis results from analyze_stocks()
-    top_n (int): Number of top stocks to analyze
-    
-    Returns:
-    dict: Detailed analysis and recommendations for top stocks
     """
     recommendations = {}
     
@@ -172,10 +194,10 @@ def get_stock_recommendations(df, top_n=5):
                 {', '.join(met_criteria.keys())}
                 
                 Key Strengths:
-                - {'Low P/E ratio of ' + str(row['P/E Ratio']) if row['P/E Ratio'] < 15 else ''}
-                - {'Strong earnings growth of ' + str(row['Earnings Growth (%)']) + '%' if row['Earnings Growth (%)'] > 10 else ''}
-                - {'Healthy dividend yield of ' + str(row['Dividend Yield (%)']) + '%' if row['Dividend Yield (%)'] > 2.5 else ''}
-                - {'Superior ROE of ' + str(row['ROE (%)']) + '%' if row['ROE (%)'] > 15 else ''}
+                - {'P/E ratio of ' + str(row['P/E Ratio']) if row['P/E Ratio'] != float('inf') else 'N/A'}
+                - {'Earnings growth of ' + str(row['Earnings Growth (%)']) + '%' if row['Earnings Growth (%)'] > 0 else 'N/A'}
+                - {'Dividend yield of ' + str(row['Dividend Yield (%)']) + '%' if row['Dividend Yield (%)'] > 0 else 'N/A'}
+                - {'ROE of ' + str(row['ROE (%)']) + '%' if row['ROE (%)'] > 0 else 'N/A'}
                 
                 Valuation Metrics:
                 - EV/EBITDA: {row['EV/EBITDA']}
@@ -189,12 +211,10 @@ def get_stock_recommendations(df, top_n=5):
                 - Debt/Equity: {row['Debt/Equity']}
                 
                 Risk Factors:
-                - Industry cyclicality: {row['Industry']}
-                - Market cap size: ${row['Market Cap (B)']}B
-                - Technical momentum
+                - Industry: {row['Industry']}
+                - Market Cap: ${row['Market Cap (B)']}B
                 
                 Recommendation: 
-                Consider for value investment portfolio with appropriate position sizing.
                 The stock meets multiple value criteria suggesting a potential margin of safety.
             """
         }
@@ -202,17 +222,53 @@ def get_stock_recommendations(df, top_n=5):
     
     return recommendations
 
+def get_user_input(prompt, default_value, value_type=float):
+    user_val = input(f"{prompt} [{default_value}]: ").strip()
+    if not user_val:
+        return default_value
+    try:
+        return value_type(user_val)
+    except ValueError:
+        print(f"Invalid input. Using default: {default_value}")
+        return default_value
+
 def main():
-    # Example usage
-    tickers = [
+    print("--- Undervalued Stocks Scanner Settings ---")
+    
+    # Stock Market Choice
+    suffix = input("Enter market suffix (e.g., .MX for Mexico, leave blank for US): ").strip()
+    
+    # Thresholds Tweaking
+    print("\nSet your scouting criteria thresholds:")
+    custom_thresholds = {
+        'max_pe': get_user_input("Max P/E Ratio", 15),
+        'max_pb': get_user_input("Max P/B Ratio", 2),
+        'min_div_yield': get_user_input("Min Dividend Yield (%)", 2.5),
+        'min_roe': get_user_input("Min ROE (%)", 15),
+        'max_debt_equity': get_user_input("Max Debt/Equity Ratio", 100),
+    }
+
+    # Overall Threshold
+    criteria_threshold = get_user_input("\nHow many criteria sets must be met? (1-6)", 3, int)
+
+    # Example tickers (US by default)
+    base_tickers = [
         'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSM', 'ASML',
         'AVGO', 'ORCL', 'CSCO', 'ADBE', 'CRM', 'QCOM', 'INTC', 'AMD',
         'JPM', 'BAC', 'WFC', 'GS', 'MS', 'C', 'BRK-B', 'V', 'MA',
         'JNJ', 'PFE', 'MRK', 'ABBV', 'LLY', 'NVS', 'PG', 'KO', 'PEP'
     ]
     
+    # Mexican market examples if .MX is specified
+    if suffix.upper() == '.MX':
+        base_tickers = ['WALMEX', 'AMXL', 'FEMSAUBD', 'GFNORTEO', 'GMEXICOB', 'CEMEXCPO', 'TLEVISACPO']
+
+    tickers = [t + suffix if not t.endswith(suffix) else t for t in base_tickers]
+    
+    print(f"\nAnalyzing {len(tickers)} stocks...")
+    
     # Analyze stocks
-    results = analyze_stocks(tickers)
+    results = analyze_stocks(tickers, criteria_threshold=criteria_threshold, custom_thresholds=custom_thresholds)
     
     # Print results
     if not results.empty:
