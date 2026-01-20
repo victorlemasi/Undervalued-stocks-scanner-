@@ -232,6 +232,26 @@ def get_user_input(prompt, default_value, value_type=float):
         print(f"Invalid input. Using default: {default_value}")
         return default_value
 
+def parse_market_cap(input_str, default_value):
+    input_str = input_str.strip().upper()
+    if not input_str:
+        return default_value
+    
+    multipliers = {
+        'K': 1_000,
+        'M': 1_000_000,
+        'B': 1_000_000_000,
+        'T': 1_000_000_000_000
+    }
+    
+    try:
+        if input_str[-1] in multipliers:
+            return float(input_str[:-1]) * multipliers[input_str[-1]]
+        return float(input_str)
+    except (ValueError, IndexError):
+        print(f"Invalid input format. Using default: {default_value}")
+        return default_value
+
 def main():
     print("--- Undervalued Stocks Scanner Settings ---")
     
@@ -253,8 +273,9 @@ def main():
 
     # Market Cap Threshold
     print("\nMinimum Market Cap Settings:")
-    print("Example: 1000000000 for $1B, 50000000 for $50M")
-    min_market_cap = get_user_input("Min Market Cap", 1000000000, float)
+    print("Supports shorthand: 500K, 50M, 1B, 1.5T or raw numbers like 500000")
+    raw_cap = input("Min Market Cap [1B]: ").strip()
+    min_market_cap = parse_market_cap(raw_cap, 1_000_000_000)
 
     # Example tickers (US by default)
     base_tickers = [
