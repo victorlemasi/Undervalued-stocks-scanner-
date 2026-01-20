@@ -251,6 +251,11 @@ def main():
     # Overall Threshold
     criteria_threshold = get_user_input("\nHow many criteria sets must be met? (1-6)", 3, int)
 
+    # Market Cap Threshold
+    print("\nMinimum Market Cap Settings:")
+    print("Example: 1000000000 for $1B, 50000000 for $50M")
+    min_market_cap = get_user_input("Min Market Cap", 1000000000, float)
+
     # Example tickers (US by default)
     base_tickers = [
         'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'NVDA', 'TSM', 'ASML',
@@ -265,10 +270,10 @@ def main():
 
     tickers = [t + suffix if not t.endswith(suffix) else t for t in base_tickers]
     
-    print(f"\nAnalyzing {len(tickers)} stocks...")
+    print(f"\nAnalyzing {len(tickers)} stocks with Min Market Cap ${min_market_cap:,.0f}...")
     
     # Analyze stocks
-    results = analyze_stocks(tickers, criteria_threshold=criteria_threshold, custom_thresholds=custom_thresholds)
+    results = analyze_stocks(tickers, min_market_cap=min_market_cap, criteria_threshold=criteria_threshold, custom_thresholds=custom_thresholds)
     
     # Print results
     if not results.empty:
